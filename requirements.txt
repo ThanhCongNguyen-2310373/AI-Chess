@@ -1,0 +1,6 @@
+pygame>=2.6.0
+python-chess>=1.999
+numpy>=1.24.3
+pandas>=2.0.3
+matplotlib>=3.7.2
+tqdm>=4.66.0

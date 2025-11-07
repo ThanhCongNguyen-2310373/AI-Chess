@@ -1,0 +1,55 @@
+# 🎮 AI CHESS - Bài Tập Lớn 2
+
+## Game Playing Agent - Cờ Vua với Minimax và Machine Learning
+
+### 🚀 Bắt đầu nhanh
+
+```bash
+# 1. Cài đặt thư viện
+pip install -r requirements.txt
+
+# 2. Kiểm tra hệ thống
+python test_system.py
+
+# 3. Chơi game
+python main.py
+
+# 4. Đánh giá agents
+python evaluate.py
+```
+
+
+### ✅ Yêu cầu đề bài
+
+| Yêu cầu | Trạng thái | Tỉ trọng |
+|---------|------------|----------|
+| Agent đúng luật | ✅ Hoàn thành | Bắt buộc |
+| Minimax >= 90% vs Random | ✅ Code sẵn sàng | 75% |
+| ML >= 60% vs Random | ✅ Code sẵn sàng | 25% |
+
+### 🤖 Agents
+
+1. **Random Agent** - Baseline
+2. **Minimax Agent** - Alpha-Beta Pruning, Evaluation Function
+3. **ML Agent** - CNN Neural Network
+
+### 📁 Cấu trúc thư mục
+
+```
+AI-Chess/
+├── agents/              # AI agents
+├── ml_training/         # ML training notebook
+├── data/               # Data & models
+├── documentation/      # Tài liệu hướng dẫn
+├── main.py            # Chạy game
+├── evaluate.py        # Đánh giá
+├── generate_data.py   # Tạo data
+└── test_system.py     # Kiểm tra
+```
+
+### 💻 Yêu cầu
+
+- Python 3.8+
+- Các thư viện trong `requirements.txt`
+
+
