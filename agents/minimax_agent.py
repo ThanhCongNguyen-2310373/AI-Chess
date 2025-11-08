@@ -8,15 +8,65 @@ from config import MINIMAX_DEPTH
 
 
 class MinimaxAgent(BaseAgent):
-    """Agent sử dụng Minimax với Alpha-Beta Pruning"""
+    """Agent sử dụng Minimax với Alpha-Beta Pruning (Nâng cấp)"""
     
     def __init__(self, depth=MINIMAX_DEPTH):
         super().__init__(name="Minimax Agent")
         self.depth = depth
     
+    def order_moves(self, board, moves):
+        """
+        Sắp xếp nước đi để tối ưu Alpha-Beta Pruning
+        Nước đi tốt hơn được xét trước -> pruning nhiều hơn
+        
+        Args:
+            board: Bàn cờ hiện tại
+            moves: Danh sách nước đi cần sắp xếp
+        
+        Returns:
+            Danh sách nước đi đã sắp xếp
+        """
+        move_scores = []
+        
+        for move in moves:
+            score = 0
+            
+            # 1. Ưu tiên bắt quân (captures)
+            if board.is_capture(move):
+                captured_piece = board.piece_at(move.to_square)
+                moving_piece = board.piece_at(move.from_square)
+                if captured_piece and moving_piece:
+                    # MVV-LVA: Most Valuable Victim - Least Valuable Attacker
+                    score += 1000 + get_piece_value(captured_piece) - get_piece_value(moving_piece) // 10
+            
+            # 2. Ưu tiên phong cấp (promotions)
+            if move.promotion:
+                score += 900
+            
+            # 3. Ưu tiên chiếu hết (checks)
+            board.push(move)
+            if board.is_checkmate():
+                score += 10000  # Chiếu hết là tốt nhất!
+            elif board.is_check():
+                score += 100
+            board.pop()
+            
+            # 4. Ưu tiên nước đi vào trung tâm
+            to_file = chess.square_file(move.to_square)
+            to_rank = chess.square_rank(move.to_square)
+            if (to_file in [3, 4] and to_rank in [3, 4]):  # e4, e5, d4, d5
+                score += 30
+            
+            move_scores.append((score, move))
+        
+        # Sắp xếp giảm dần theo score
+        move_scores.sort(reverse=True, key=lambda x: x[0])
+        
+        return [move for _, move in move_scores]
+    
     def evaluate_board(self, board):
         """
-        Hàm đánh giá bàn cờ
+        Hàm đánh giá bàn cờ (nâng cấp với nhiều yếu tố hơn)
         
         Args:
             board: Bàn cờ cần đánh giá
@@ -37,7 +87,10 @@ class MinimaxAgent(BaseAgent):
         score = 0
         endgame = is_endgame(board)
         
-        # Đánh giá từng quân cờ
+        # 1. Đánh giá từng quân cờ (Material + Position)
+        white_material = 0
+        black_material = 0
+        
         for square in chess.SQUARES:
             piece = board.piece_at(square)
             if piece:
@@ -52,27 +105,125 @@ class MinimaxAgent(BaseAgent):
                 # Cộng điểm cho trắng, trừ điểm cho đen
                 if piece.color == chess.WHITE:
                     score += total_value
+                    white_material += piece_value
                 else:
                     score -= total_value
+                    black_material += piece_value
         
-        # Thưởng cho khả năng di chuyển (mobility)
-        if board.turn == chess.WHITE:
-            score += len(list(board.legal_moves)) * 10
+        # 2. Mobility (Khả năng di chuyển) - càng nhiều nước đi càng tốt
+        white_mobility = len(list(board.legal_moves)) if board.turn == chess.WHITE else 0
+        black_mobility = len(list(board.legal_moves)) if board.turn == chess.BLACK else 0
+        
+        # Simulate để đếm mobility của bên kia
+        board.push(chess.Move.null())  # Null move
+        if board.turn == chess.BLACK:
+            white_mobility = len(list(board.legal_moves))
         else:
-            score -= len(list(board.legal_moves)) * 10
+            black_mobility = len(list(board.legal_moves))
+        board.pop()
         
-        # Phạt nếu bị chiếu
+        score += (white_mobility - black_mobility) * 10
+        
+        # 3. King Safety (An toàn vua) - quan trọng trong opening/middlegame
+        if not endgame:
+            white_king_sq = board.king(chess.WHITE)
+            black_king_sq = board.king(chess.BLACK)
+            
+            # Kiểm tra vua có được bảo vệ bởi tốt không
+            if white_king_sq:
+                # Đếm tốt trắng quanh vua trắng
+                king_file = chess.square_file(white_king_sq)
+                king_rank = chess.square_rank(white_king_sq)
+                pawn_shield = 0
+                for file_offset in [-1, 0, 1]:
+                    f = king_file + file_offset
+                    if 0 <= f < 8 and king_rank < 7:
+                        sq = chess.square(f, king_rank + 1)
+                        piece = board.piece_at(sq)
+                        if piece and piece.piece_type == chess.PAWN and piece.color == chess.WHITE:
+                            pawn_shield += 15
+                score += pawn_shield
+            
+            if black_king_sq:
+                king_file = chess.square_file(black_king_sq)
+                king_rank = chess.square_rank(black_king_sq)
+                pawn_shield = 0
+                for file_offset in [-1, 0, 1]:
+                    f = king_file + file_offset
+                    if 0 <= f < 8 and king_rank > 0:
+                        sq = chess.square(f, king_rank - 1)
+                        piece = board.piece_at(sq)
+                        if piece and piece.piece_type == chess.PAWN and piece.color == chess.BLACK:
+                            pawn_shield += 15
+                score -= pawn_shield
+        
+        # 4. Pawn Structure (Cấu trúc tốt)
+        # Tốt đơn (isolated pawn) bị phạt
+        # Tốt kép (doubled pawn) bị phạt
+        for file in range(8):
+            white_pawns_on_file = 0
+            black_pawns_on_file = 0
+            
+            for rank in range(8):
+                sq = chess.square(file, rank)
+                piece = board.piece_at(sq)
+                if piece and piece.piece_type == chess.PAWN:
+                    if piece.color == chess.WHITE:
+                        white_pawns_on_file += 1
+                    else:
+                        black_pawns_on_file += 1
+            
+            # Phạt tốt kép
+            if white_pawns_on_file > 1:
+                score -= 10 * (white_pawns_on_file - 1)
+            if black_pawns_on_file > 1:
+                score += 10 * (black_pawns_on_file - 1)
+        
+        # 5. Control Center (Kiểm soát trung tâm) - quan trọng!
+        center_squares = [chess.E4, chess.E5, chess.D4, chess.D5]
+        for sq in center_squares:
+            # Kiểm tra quân nào đang chiếm trung tâm
+            piece = board.piece_at(sq)
+            if piece:
+                if piece.color == chess.WHITE:
+                    score += 20
+                else:
+                    score -= 20
+            
+            # Kiểm tra quân nào đang tấn công trung tâm
+            white_attackers = len(board.attackers(chess.WHITE, sq))
+            black_attackers = len(board.attackers(chess.BLACK, sq))
+            score += (white_attackers - black_attackers) * 5
+        
+        # 6. Check penalty/bonus
         if board.is_check():
             if board.turn == chess.WHITE:
-                score -= 50
+                score -= 50  # Trắng bị chiếu
             else:
-                score += 50
+                score += 50  # Đen bị chiếu
+        
+        # 7. Development bonus (Opening phase)
+        if not endgame and board.fullmove_number <= 15:
+            # Thưởng cho việc phát triển quân
+            white_developed = 0
+            black_developed = 0
+            
+            # Kiểm tra mã và tượng có rời khỏi hàng đầu chưa
+            for piece_type in [chess.KNIGHT, chess.BISHOP]:
+                for square in board.pieces(piece_type, chess.WHITE):
+                    if chess.square_rank(square) > 0:  # Đã rời hàng 1
+                        white_developed += 10
+                for square in board.pieces(piece_type, chess.BLACK):
+                    if chess.square_rank(square) < 7:  # Đã rời hàng 8
+                        black_developed += 10
+            
+            score += white_developed - black_developed
         
         return score
     
     def minimax(self, board, depth, alpha, beta, maximizing_player):
         """
-        Thuật toán Minimax với Alpha-Beta Pruning
+        Thuật toán Minimax với Alpha-Beta Pruning (có Move Ordering)
         
         Args:
             board: Bàn cờ hiện tại
@@ -90,9 +241,13 @@ class MinimaxAgent(BaseAgent):
         if depth == 0 or board.is_game_over():
             return self.evaluate_board(board)
         
+        # Lấy và sắp xếp nước đi (Move Ordering để tăng pruning)
+        legal_moves = list(board.legal_moves)
+        ordered_moves = self.order_moves(board, legal_moves)
+        
         if maximizing_player:
             max_eval = float('-inf')
-            for move in board.legal_moves:
+            for move in ordered_moves:
                 board.push(move)
                 eval_score = self.minimax(board, depth - 1, alpha, beta, False)
                 board.pop()
@@ -103,7 +258,7 @@ class MinimaxAgent(BaseAgent):
             return max_eval
         else:
             min_eval = float('inf')
-            for move in board.legal_moves:
+            for move in ordered_moves:
                 board.push(move)
                 eval_score = self.minimax(board, depth - 1, alpha, beta, True)
                 board.pop()
@@ -115,7 +270,7 @@ class MinimaxAgent(BaseAgent):
     
     def get_move(self, board):
         """
-        Tìm nước đi tốt nhất bằng Minimax
+        Tìm nước đi tốt nhất bằng Minimax (với Move Ordering)
         
         Args:
             board: Bàn cờ hiện tại
@@ -129,13 +284,16 @@ class MinimaxAgent(BaseAgent):
         if not legal_moves:
             return None
         
+        # Sắp xếp nước đi để xét nước tốt trước
+        ordered_moves = self.order_moves(board, legal_moves)
+        
         best_move = None
         best_value = float('-inf') if board.turn == chess.WHITE else float('inf')
         alpha = float('-inf')
         beta = float('inf')
         
-        # Duyệt qua tất cả nước đi hợp lệ
-        for move in legal_moves:
+        # Duyệt qua các nước đi đã sắp xếp
+        for move in ordered_moves:
             board.push(move)
             
             # Gọi minimax để đánh giá

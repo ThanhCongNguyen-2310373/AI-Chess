@@ -47,7 +47,28 @@ AI-Chess/
 └── test_system.py     # Kiểm tra
 ```
 
-### 💻 Yêu cầu
+### � Download ML Model
+
+**File model quá lớn (27MB) nên không đưa vào git.**
+
+**Cách 1: Upload lên Google Drive (Khuyến nghị)**
+```
+1. Mở link: https://drive.google.com/file/d/11q6N1yLlEqNxfFKiYn7nLudQu3wn7pLd/view?usp=drive_link
+2. Download file: chess_model.h5
+3. Đặt vào: AI-Chess/models/chess_model.h5
+```
+
+**Cách 2: Train model tự tạo**
+```bash
+# Generate training data (1000 games)
+python generate_data.py
+
+# Upload data/chess_data.csv lên Google Colab
+# Chạy notebook ml_training/train_model.ipynb
+# Download model về models/chess_model.h5
+```
+
+### �💻 Yêu cầu
 
 - Python 3.8+
 - Các thư viện trong `requirements.txt`

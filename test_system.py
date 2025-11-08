@@ -8,7 +8,7 @@ import os
 def test_imports():
     """Kiểm tra import các thư viện"""
     print("="*60)
-    print("KIỂM TRA THỨ VIỆN")
+    print("KIỂM TRA THƯ VIỆN")
     print("="*60)
     
     tests = [
