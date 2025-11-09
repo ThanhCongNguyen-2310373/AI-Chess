@@ -3,8 +3,9 @@ Agent sử dụng Machine Learning (Neural Network)
 """
 import chess
 import numpy as np
+import os
 from .base_agent import BaseAgent
-from utils import fen_to_tensor
+from utils import fen_to_tensor, get_piece_value
 from config import ML_DEPTH, ML_MODEL_PATH
 
 
@@ -17,7 +18,14 @@ class MLAgent(BaseAgent):
         self.model = None
         self.model_path = model_path
         self._evaluation_cache = {}  # Cache để tăng tốc
+        
+        # De-normalization parameters (LƯU Ý: Cần load từ file hoặc set từ training)
+        # Giá trị mặc định tạm thời (NẾU không có file normalization_params.npy)
+        self.y_mean = 0.0
+        self.y_std = 1000.0  # Giá trị ước lượng
+        
         self._load_model()
+        self._load_normalization_params()
     
     def _load_model(self):
         """Tải model đã train"""
@@ -30,6 +38,26 @@ class MLAgent(BaseAgent):
             print(f"✗ Không thể tải model: {e}")
             print("  Agent sẽ sử dụng đánh giá ngẫu nhiên")
             self.model = None
+    
+    def _load_normalization_params(self):
+        """Tải parameters để de-normalize (y_mean, y_std)"""
+        # Tìm file normalization_params.npy cùng thư mục với model
+        model_dir = os.path.dirname(self.model_path)
+        params_path = os.path.join(model_dir, 'normalization_params.npy')
+        
+        try:
+            if os.path.exists(params_path):
+                params = np.load(params_path)
+                self.y_mean = float(params[0])
+                self.y_std = float(params[1])
+                print(f"✓ Đã tải normalization params: mean={self.y_mean:.2f}, std={self.y_std:.2f}")
+            else:
+                print(f"⚠ Không tìm thấy {params_path}")
+                print(f"  Sử dụng giá trị mặc định: mean={self.y_mean:.2f}, std={self.y_std:.2f}")
+                print(f"  Để tạo file này, chạy lại training và lưu np.array([y_mean, y_std])")
+        except Exception as e:
+            print(f"⚠ Lỗi khi load normalization params: {e}")
+            print(f"  Sử dụng giá trị mặc định")
     
     def evaluate_board(self, board):
         """
@@ -68,14 +96,61 @@ class MLAgent(BaseAgent):
         
         # Dự đoán
         try:
-            score = self.model.predict(tensor_batch, verbose=0)[0][0]
-            score = float(score)
+            score_normalized = self.model.predict(tensor_batch, verbose=0)[0][0]
+            
+            # DE-NORMALIZE: Chuyển từ normalized score về actual score
+            score_actual = float(score_normalized * self.y_std + self.y_mean)
+            
             # Lưu vào cache
-            self._evaluation_cache[fen] = score
-            return score
+            self._evaluation_cache[fen] = score_actual
+            return score_actual
         except Exception as e:
             print(f"Lỗi khi predict: {e}")
             return 0.0
+    
+    def order_moves(self, board, moves):
+        """
+        Sắp xếp nước đi theo thứ tự ưu tiên (MVV-LVA + Checks)
+        Giúp alpha-beta pruning hiệu quả hơn
+        
+        Args:
+            board: Bàn cờ hiện tại
+            moves: Danh sách nước đi cần sắp xếp
+        
+        Returns:
+            Danh sách nước đi đã sắp xếp
+        """
+        def move_priority(move):
+            priority = 0
+            
+            # 1. Captures (MVV-LVA: Most Valuable Victim - Least Valuable Attacker)
+            if board.is_capture(move):
+                # Quân bị bắt
+                victim = board.piece_at(move.to_square)
+                if victim:
+                    victim_value = get_piece_value(victim)
+                    priority += victim_value * 10
+                
+                # Quân tấn công
+                attacker = board.piece_at(move.from_square)
+                if attacker:
+                    attacker_value = get_piece_value(attacker)
+                    priority -= attacker_value  # Quân nhỏ bắt quân lớn = tốt hơn
+            
+            # 2. Promotions
+            if move.promotion:
+                priority += 9000  # Rất cao
+            
+            # 3. Checks
+            board.push(move)
+            if board.is_check():
+                priority += 50
+            board.pop()
+            
+            return priority
+        
+        # Sắp xếp theo priority giảm dần
+        return sorted(moves, key=move_priority, reverse=True)
     
     def minimax(self, board, depth, alpha, beta, maximizing_player):
         """
@@ -96,9 +171,13 @@ class MLAgent(BaseAgent):
         if depth == 0 or board.is_game_over():
             return self.evaluate_board(board)
         
+        # Sắp xếp nước đi để cải thiện pruning
+        legal_moves = list(board.legal_moves)
+        ordered_moves = self.order_moves(board, legal_moves)
+        
         if maximizing_player:
             max_eval = float('-inf')
-            for move in board.legal_moves:
+            for move in ordered_moves:
                 board.push(move)
                 eval_score = self.minimax(board, depth - 1, alpha, beta, False)
                 board.pop()
@@ -109,7 +188,7 @@ class MLAgent(BaseAgent):
             return max_eval
         else:
             min_eval = float('inf')
-            for move in board.legal_moves:
+            for move in ordered_moves:
                 board.push(move)
                 eval_score = self.minimax(board, depth - 1, alpha, beta, True)
                 board.pop()
@@ -139,12 +218,15 @@ class MLAgent(BaseAgent):
         if not legal_moves:
             return None
         
+        # Sắp xếp nước đi trước khi đánh giá
+        ordered_moves = self.order_moves(board, legal_moves)
+        
         best_move = None
         best_value = float('-inf') if board.turn == chess.WHITE else float('inf')
         alpha = float('-inf')
         beta = float('inf')
         
-        for move in legal_moves:
+        for move in ordered_moves:
             board.push(move)
             
             if board.turn == chess.BLACK:

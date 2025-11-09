@@ -149,7 +149,7 @@ def main():
     minimax_agent = MinimaxAgent(depth=3)
     
     print("✓ Random Agent")
-    print("✓ Minimax Agent (depth=3)")
+    print("✓ Minimax Agent")
     
     # Đánh giá Minimax vs Random
     print("\n" + "="*60)

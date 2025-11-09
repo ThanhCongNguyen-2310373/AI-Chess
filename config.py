@@ -16,7 +16,7 @@ COLOR_SELECTED = (246, 246, 130)
 
 # Cấu hình AI
 MINIMAX_DEPTH = 3  # Độ sâu tìm kiếm Minimax
-ML_DEPTH = 1       # Độ sâu cho ML agent (1 vì ML evaluation chậm hơn)
+ML_DEPTH = 2       # Độ sâu cho ML agent
 
 # Giá trị quân cờ
 PIECE_VALUES = {

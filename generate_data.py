@@ -31,7 +31,7 @@ def generate_game_data(num_games=100, depth=2, save_interval=100):
     for game_num in tqdm(range(num_games), desc="Generating games"):
         board = chess.Board()
         move_count = 0
-        max_moves = 80
+        max_moves = 150
         
         while not board.is_game_over() and move_count < max_moves:
             # Lưu trạng thái hiện tại

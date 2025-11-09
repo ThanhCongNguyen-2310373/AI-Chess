@@ -19,56 +19,49 @@ python evaluate.py
 ```
 
 
-### ✅ Yêu cầu đề bài
-
-| Yêu cầu | Trạng thái | Tỉ trọng |
-|---------|------------|----------|
-| Agent đúng luật | ✅ Hoàn thành | Bắt buộc |
-| Minimax >= 90% vs Random | ✅ Code sẵn sàng | 75% |
-| ML >= 60% vs Random | ✅ Code sẵn sàng | 25% |
-
-### 🤖 Agents
-
-1. **Random Agent** - Baseline
-2. **Minimax Agent** - Alpha-Beta Pruning, Evaluation Function
-3. **ML Agent** - CNN Neural Network
-
 ### 📁 Cấu trúc thư mục
 
 ```
 AI-Chess/
 ├── agents/              # AI agents
 ├── ml_training/         # ML training notebook
-├── data/               # Data & models
-├── documentation/      # Tài liệu hướng dẫn
-├── main.py            # Chạy game
-├── evaluate.py        # Đánh giá
-├── generate_data.py   # Tạo data
-└── test_system.py     # Kiểm tra
+├── data/                # Data
+├── models               # Models đã train
+├── main.py              # Chạy game
+├── evaluate.py          # Đánh giá
+├── generate_data.py     # Tạo data
+└── test_system.py       # Kiểm tra
 ```
 
-### � Download ML Model
+### 📦 Download ML Model
 
 **File model quá lớn (27MB) nên không đưa vào git.**
 
-**Cách 1: Upload lên Google Drive (Khuyến nghị)**
+**Cách 1: Download từ Google Drive (Khuyến nghị)**
 ```
-1. Mở link: https://drive.google.com/file/d/11q6N1yLlEqNxfFKiYn7nLudQu3wn7pLd/view?usp=drive_link
-2. Download file: chess_model.h5
-3. Đặt vào: AI-Chess/models/chess_model.h5
+1. Mở link: https://drive.google.com/drive/folders/11uqFIv9wt6rTrsMjtNakGkYQ-NhpJ335?usp=sharing
+2. Download 2 files:
+   - chess_model.h5 (model)
+   - normalization_params.npy (de-normalization parameters)
+3. Đặt vào: AI-Chess/models/
 ```
+
+**⚠️ Quan trọng:** Cần CẢ 2 FILES để ML Agent hoạt động chính xác!
+- Không có `normalization_params.npy` → ML Agent vẫn chạy nhưng chưa tối ưu
 
 **Cách 2: Train model tự tạo**
 ```bash
-# Generate training data (1000 games)
+# 1. Generate training data (1000+ games)
 python generate_data.py
 
-# Upload data/chess_data.csv lên Google Colab
-# Chạy notebook ml_training/train_model.ipynb
-# Download model về models/chess_model.h5
+# 2. Upload data/chess_data.csv lên Google Colab
+# 3. Chạy notebook ml_training/train_model.ipynb (đã update)
+# 4. Download 2 files về models/:
+#    - chess_model.h5
+#    - normalization_params.npy
 ```
 
-### �💻 Yêu cầu
+###  Yêu cầu
 
 - Python 3.8+
 - Các thư viện trong `requirements.txt`
