@@ -12,7 +12,11 @@ class ChessUI:
     
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        
+        # Tăng chiều cao để chứa info bar ở trênagent
+        self.info_bar_height = 60
+        total_height = SCREEN_HEIGHT + self.info_bar_height
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, total_height))
         pygame.display.set_caption("AI Chess - BTL2")
         self.clock = pygame.time.Clock()
         
@@ -22,10 +26,13 @@ class ChessUI:
         # Font
         self.font = pygame.font.Font(None, 36)
         self.small_font = pygame.font.Font(None, 24)
+        self.info_font = pygame.font.Font(None, 28)
         
         # Trạng thái UI
         self.selected_square = None
         self.valid_moves = []
+        self.move_history = []  # Lịch sử nước đi của người chơi (để undo)
+        self.is_paused = False  # Trạng thái pause
     
     def _load_piece_images(self):
         """
@@ -77,9 +84,9 @@ class ChessUI:
                 # Xác định màu ô
                 color = COLOR_WHITE if (row + col) % 2 == 0 else COLOR_BLACK
                 
-                # Tính vị trí
+                # Tính vị trí (shift xuống để dành chỗ cho info bar)
                 x = col * SQUARE_SIZE
-                y = row * SQUARE_SIZE
+                y = row * SQUARE_SIZE + self.info_bar_height
                 
                 # Vẽ ô
                 pygame.draw.rect(self.screen, color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
@@ -115,12 +122,41 @@ class ChessUI:
             col = to_square % 8
             row = 7 - (to_square // 8)
             x = col * SQUARE_SIZE + SQUARE_SIZE // 2
-            y = row * SQUARE_SIZE + SQUARE_SIZE // 2
+            y = row * SQUARE_SIZE + SQUARE_SIZE // 2 + self.info_bar_height
             pygame.draw.circle(self.screen, (0, 255, 0), (x, y), 10)
+    
+    def draw_info_bar(self, text, color=(255, 255, 255)):
+        """
+        Vẽ thanh thông tin ở trên cùng (trên bàn cờ)
+        
+        Args:
+            text: Text cần hiển thị
+            color: Màu chữ
+        """
+        # Vẽ background cho info bar
+        pygame.draw.rect(self.screen, (40, 40, 40), (0, 0, SCREEN_WIDTH, self.info_bar_height))
+        pygame.draw.line(self.screen, (100, 100, 100), 
+                        (0, self.info_bar_height), 
+                        (SCREEN_WIDTH, self.info_bar_height), 2)
+        
+        # Vẽ text CANH LỀ TRÁI (không đè hint controls)
+        text_surface = self.info_font.render(text, True, color)
+        text_rect = text_surface.get_rect()
+        text_rect.left = 15  # Canh lề trái
+        text_rect.centery = self.info_bar_height // 2
+        self.screen.blit(text_surface, text_rect)
+        
+        # Vẽ hint controls ở góc phải
+        hint_text = "U: Undo | R: Pause | ESC: Quit"
+        hint_surface = self.small_font.render(hint_text, True, (180, 180, 180))
+        hint_rect = hint_surface.get_rect()
+        hint_rect.right = SCREEN_WIDTH - 10
+        hint_rect.centery = self.info_bar_height // 2
+        self.screen.blit(hint_surface, hint_rect)
     
     def draw_info(self, text, y_offset=10, color=(255, 255, 255)):
         """
-        Vẽ thông tin lên màn hình
+        Vẽ thông tin lên màn hình (deprecated - dùng draw_info_bar thay thế)
         
         Args:
             text: Text cần hiển thị
@@ -129,7 +165,7 @@ class ChessUI:
         """
         text_surface = self.small_font.render(text, True, color)
         text_rect = text_surface.get_rect()
-        text_rect.topleft = (10, y_offset)
+        text_rect.topleft = (10, y_offset + self.info_bar_height)
         
         # Vẽ background
         bg_rect = text_rect.inflate(20, 10)
@@ -138,15 +174,42 @@ class ChessUI:
         
         self.screen.blit(text_surface, text_rect)
     
+    def draw_pause_menu(self):
+        """Vẽ menu pause"""
+        # Vẽ overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT + self.info_bar_height))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Title
+        title = self.font.render("PAUSED", True, (255, 255, 0))
+        title_rect = title.get_rect()
+        title_rect.center = (SCREEN_WIDTH // 2, (SCREEN_HEIGHT + self.info_bar_height) // 2 - 50)
+        self.screen.blit(title, title_rect)
+        
+        # Instructions
+        instructions = [
+            "Press R to Resume",
+            "Press U to Undo Move",
+            "Press ESC to Quit"
+        ]
+        
+        for i, text in enumerate(instructions):
+            text_surface = self.small_font.render(text, True, (200, 200, 200))
+            text_rect = text_surface.get_rect()
+            text_rect.center = (SCREEN_WIDTH // 2, (SCREEN_HEIGHT + self.info_bar_height) // 2 + i * 30)
+            self.screen.blit(text_surface, text_rect)
+    
     def draw_game_over(self, result_text):
         """
         Vẽ màn hình kết thúc
         
         Args:
-            result_text: Kết quả trận đấu
+            result_text: Kết quả trận đấu (English)
         """
         # Vẽ overlay
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT + self.info_bar_height))
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
@@ -154,14 +217,14 @@ class ChessUI:
         # Vẽ text
         text_surface = self.font.render(result_text, True, (255, 255, 255))
         text_rect = text_surface.get_rect()
-        text_rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        text_rect.center = (SCREEN_WIDTH // 2, (SCREEN_HEIGHT + self.info_bar_height) // 2)
         self.screen.blit(text_surface, text_rect)
         
         # Hướng dẫn
         help_text = self.small_font.render("Press SPACE to restart, ESC to quit", 
                                           True, (200, 200, 200))
         help_rect = help_text.get_rect()
-        help_rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
+        help_rect.center = (SCREEN_WIDTH // 2, (SCREEN_HEIGHT + self.info_bar_height) // 2 + 50)
         self.screen.blit(help_text, help_rect)
     
     def get_square_from_mouse(self, pos):
@@ -175,6 +238,9 @@ class ChessUI:
             Square index (0-63) hoặc None
         """
         x, y = pos
+        # Trừ đi info_bar_height
+        y -= self.info_bar_height
+        
         col = x // SQUARE_SIZE
         row = y // SQUARE_SIZE
         
@@ -227,6 +293,46 @@ class ChessUI:
                 return move
         
         return None
+    
+    def save_move_for_undo(self, board_fen, move):
+        """
+        Lưu nước đi để có thể undo
+        
+        Args:
+            board_fen: FEN của board trước khi đi
+            move: Nước đi
+        """
+        self.move_history.append((board_fen, move))
+    
+    def can_undo(self):
+        """Kiểm tra có thể undo không"""
+        return len(self.move_history) >= 1  # Cần ít nhất 1 nước của người chơi
+    
+    def get_undo_state(self):
+        """
+        Lấy trạng thái board để undo (CHỈ undo nước của người chơi vừa đi)
+        
+        Returns:
+            FEN của board sau khi undo, hoặc None
+        """
+        if not self.can_undo():
+            return None
+        
+        # Bỏ 1 nước cuối (nước của người chơi vừa đi)
+        self.move_history.pop()
+        
+        if self.move_history:
+            return self.move_history[-1][0]  # FEN sau nước cuối còn lại
+        else:
+            return chess.Board().fen()  # Board ban đầu
+    
+    def clear_history(self):
+        """Xóa lịch sử (khi restart)"""
+        self.move_history.clear()
+    
+    def toggle_pause(self):
+        """Bật/tắt pause"""
+        self.is_paused = not self.is_paused
     
     def update(self):
         """Cập nhật màn hình"""
